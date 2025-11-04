@@ -40,7 +40,7 @@ float Gri_roll = 0.0, Gri_pitch = 0.0, Gri_yaw = 0.0;
 float Torque_roll1 = 0.0, Torque_roll2 = 0.0, Torque_pitch = 0.0, Torque_yaw = 0.0;
 int s1 = 1, s2 = 1;
 
-float prevRoll1 = 0, prevRoll2 = 0, prevPitch = 0, prevYaw = 0; ###
+float prevRoll1 = 0, prevRoll2 = 0, prevPitch = 0, prevYaw = 0; 
 float sumRoll1 = 0, sumRoll2 = 0, sumPitch = 0, sumYaw = 0;
 float OldValueRoll = 0, OldValuePitch = 0, OldValueYaw = 0;
 float roll = 0, pitch = 0, yaw = 0;
@@ -129,7 +129,7 @@ void moveServos() {
   OldValuePitch = pitch;
   yaw = Gri_yaw;
   OldValueYaw = yaw;
-
+  int yaw_angle=0;
   // Initialize yaw reference on first execution
   if (!yaw_initialized) {
     initial_yaw = yaw;
@@ -165,7 +165,7 @@ void moveServos() {
     if (relative_yaw > 180) relative_yaw -= 360;
     if (relative_yaw < -180) relative_yaw += 360;
     
-    int yaw_angle = constrainAngle(90 + relative_yaw);
+    yaw_angle = constrainAngle(90 + relative_yaw);
     servo_yaw.write(yaw_angle);
   }
 
