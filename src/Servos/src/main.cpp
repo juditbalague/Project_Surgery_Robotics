@@ -85,7 +85,7 @@ void receiveOrientationUDP() {
       }
 
       const char* device = doc["device"];
-      if (strcmp(device, "G5_Gri") == 0) {
+      if (strcmp(device, "G1_Gri") == 0) {
         Gri_roll = round(doc["roll"].as<float>());
         Gri_pitch = round(doc["pitch"].as<float>());
         Gri_yaw = round(doc["yaw"].as<float>());
@@ -252,7 +252,7 @@ void setup() {
 
 void loop() {
   receiveOrientationUDP();
-  sendTorqueUDP();
   moveServos();
-  delay(20);
+  sendTorqueUDP();
+  delay(10);
 }

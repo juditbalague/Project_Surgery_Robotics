@@ -77,11 +77,13 @@ def read_data_UDP():
                     with data_lock:
                         Endowrist_rpy = received_data
                 elif device_id == "G1_Gri":
+                    
                     with data_lock:
                         Gripper_rpy = received_data
-                elif device_id == "G1_Servo":
+                elif device_id == "G1_Servos":
                     with data_lock:
                         Servo_torques = received_data
+                        print(Servo_torques)
             except json.JSONDecodeError:
                 print("Error decoding JSON data")
         except socket.error as e:
@@ -172,6 +174,7 @@ def move_robot(robot, gripper, needle, text_label):
 
             # Determine color indicator (low/medium/high torque)
             total_torque = abs(t1) + abs(t2) + abs(tp) + abs(ty)
+            print(total_torque)
             if total_torque < 0.5:
                 color = "green"
             elif total_torque < 1.0:

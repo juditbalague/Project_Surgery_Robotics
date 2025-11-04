@@ -3,7 +3,7 @@
 #include "MPU9250.h"
 #include <Wire.h> // Needed for I2C to read IMU
 #include <ArduinoJson.h> // Compatible amb versió 7.4.2
-#include <IMU_RoboticsUB.h> // Custom IMU library
+#include <IMU_RoboticsUB.h>   // Nom de la llibreria custom
 
 // Device ID
 const char *deviceId = "G1_Gri";
@@ -32,11 +32,7 @@ IMU imu;
 
 // Orientation data
 float Gri_roll = 0.0, Gri_pitch = 0.0, Gri_yaw = 0.0;
-
-// Torque data
-float Torque_roll1 = 0.0;
-float Torque_pitch = 0.0;
-float Torque_yaw = 0.0;
+float Torque_roll1 = 0.0, Torque_roll2 = 0.0, Torque_pitch = 0.0, Torque_yaw = 0.0;
 
 void connectToWiFi() {
   Serial.print("Connecting to Wi-Fi");
@@ -52,7 +48,7 @@ void connectToWiFi() {
 }
 
 void updateOrientation() {
- // Llegeix FIFO del DMP i actualitza càlculs interns
+  // Llegeix FIFO del DMP i actualitza càlculs interns
   imu.ReadSensor();
   // Obté els angles (roll, pitch, yaw) via GetRPW()
   float* rpw = imu.GetRPW();
@@ -61,6 +57,7 @@ void updateOrientation() {
   Gri_yaw   = rpw[2];
   s1Status = digitalRead(PIN_S1);
   s2Status = digitalRead(PIN_S2);
+
 }
 
 void sendOrientationUDP() {
@@ -72,8 +69,15 @@ void sendOrientationUDP() {
   doc["s1"] = s1Status;
   doc["s2"] = s2Status;
 
+  // Serial.print("Roll: ");
+  //Serial.print(Gri_roll);
+  //Serial.print(", Pitch: ");
+  //Serial.print(Gri_pitch);
+  //Serial.print(", Yaw: ");
+  //Serial.println(Gri_yaw);
+
   char jsonBuffer[512];
-  serializeJson(doc, jsonBuffer, sizeof(jsonBuffer));
+  serializeJson(doc, jsonBuffer);
 
   // Send to ESP32 Servos
   udp.beginPacket(receiverESP32IP, udpPort);
@@ -87,63 +91,54 @@ void sendOrientationUDP() {
 }
 
 void receiveTorquesUDP() {
-    char buffer[255];
-    int packetSize = udp.parsePacket();
+  int packetSize = udp.parsePacket();
+  if (packetSize) {
+    byte packetBuffer[512];
+    int len = udp.read(packetBuffer, 512);
+    if (len > 0) {
+      packetBuffer[len] = '\0';
 
-    if (!packetSize) {
+      JsonDocument doc;
+      DeserializationError error = deserializeJson(doc, packetBuffer);
+      if (error) {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.f_str());
         return;
-    }
+      }
 
-    int len = udp.read(buffer, sizeof(buffer) - 1);
-    if (len <= 0) {
-        Serial.println("UDP read returned 0");
-        return;
-    }
-    buffer[len] = '\0';
+      const char *device = doc["device"];
+      if (strcmp(device, "G1_Servos") == 0) {
+        Torque_roll1 = doc["Torque_Roll_1"];
+        Torque_roll2 = doc["Torque_Roll_2"];
+        Torque_pitch = doc["Torque_Pitch"];
+        Torque_yaw   = doc["Torque_Yaw"];
 
-    DynamicJsonDocument doc(512);
-    DeserializationError error = deserializeJson(doc, buffer);
+        // Print the received torques
+        //Serial.println("Received Torques from Servos:");
+        //Serial.print("Torque Roll 1: "); Serial.println(Torque_roll1, 3);
+        //Serial.print("Torque Roll 2: "); Serial.println(Torque_roll2, 3);
+        //Serial.print("Torque Pitch : "); Serial.println(Torque_pitch, 3);
+        //Serial.print("Torque Yaw   : "); Serial.println(Torque_yaw, 3);
+        //Serial.println("----------------------------------");
 
-    if (error) {
-        Serial.print("deserializeJson() failed: ");
-        Serial.println(error.c_str());
-        return;
-    }
-
-    // Verify sender device
-    if (doc.containsKey("device") && strcmp(doc["device"], "G1_Servos") == 0) {
-        // Get torque values with flexible key names
-        if (doc.containsKey("Torque_Roll_1")) Torque_roll1 = doc["Torque_Roll_1"].as<float>();
-        if (doc.containsKey("Torque_Pitch")) Torque_pitch = doc["Torque_Pitch"].as<float>();
-        if (doc.containsKey("Torque_Yaw")) Torque_yaw = doc["Torque_Yaw"].as<float>();
-
-        // Vibration motor control based on absolute torque values
-        float totalTorque = fabs(Torque_roll1) + fabs(Torque_pitch) + fabs(Torque_yaw);
-        int vibrationValue = constrain((int)(totalTorque * 2.5f), 0, 255);
-        ledcWrite(0, vibrationValue);
-
-        // Debug output
-        Serial.print("Torques (Roll,Pitch,Yaw): ");
-        Serial.print(Torque_roll1, 2); Serial.print(", ");
-        Serial.print(Torque_pitch, 2); Serial.print(", ");
-        Serial.println(Torque_yaw, 2);
-        Serial.print("Vibration value: ");
+        // 🔸 Vibration motor control
+        float totalTorque = Torque_roll1 + Torque_roll2 + Torque_pitch + Torque_yaw;
+        int vibrationValue = constrain(totalTorque * 100, 0, 255);
+        ledcWrite(0, vibrationValue); // PWM control for vibration
+        Serial.print("Vibration motor value: ");
         Serial.println(vibrationValue);
+      }
     }
+  }
 }
 
 void setup() {
   Serial.begin(115200);
   Wire.begin();
   delay(2000);
-
-  // Configure PWM for the vibration motor (channel 0)
-  ledcSetup(0, 5000, 8); // Channel 0, frequency 5kHz, resolution 8 bits
-  ledcAttachPin(vibrationPin, 0); // Attach the vibration motor to channel 0
-
- // Inicialitza IMU (amb DMP)
+ 
+  // Inicialitza IMU (amb DMP)
   imu.Install();
-
 
   connectToWiFi();
   udp.begin(udpPort);
@@ -151,11 +146,15 @@ void setup() {
 
   pinMode(PIN_S1, INPUT);
   pinMode(PIN_S2, INPUT);
+
+  // Configure PWM for the vibration motor (channel 0)
+  ledcSetup(0, 5000, 8); // Channel 0, frequency 5kHz, resolution 8 bits
+  ledcAttachPin(vibrationPin, 0); // Attach the vibration motor to channel 0
 }
 
 void loop() {
-    receiveTorquesUDP();
-    updateOrientation();
-    sendOrientationUDP();
-    delay(10);
+  updateOrientation();
+  sendOrientationUDP();
+  receiveTorquesUDP();
+  delay(10);
 }
