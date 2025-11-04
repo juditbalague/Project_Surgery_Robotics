@@ -8,6 +8,7 @@ import socket
 import json
 import os
 
+#Hola que tal como estas.
 # Define the relative and absolute path to the RoboDK project file
 relative_path = "src/roboDK/SurgeryRobotics.rdk"
 absolute_path = os.path.abspath(relative_path)
